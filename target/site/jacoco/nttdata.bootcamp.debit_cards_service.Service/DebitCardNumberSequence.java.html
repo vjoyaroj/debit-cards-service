@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DebitCardNumberSequence.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debit-cards-service</a> &gt; <a href="index.source.html" class="el_package">nttdata.bootcamp.debit_cards_service.Service</a> &gt; <span class="el_source">DebitCardNumberSequence.java</span></div><h1>DebitCardNumberSequence.java</h1><pre class="source lang-java linenums">package nttdata.bootcamp.debit_cards_service.Service;
+
+import nttdata.bootcamp.debit_cards_service.Entity.SequenceDocument;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+
+/**
+ * Generates unique sequential debit card numbers using the {@code sequences} collection in MongoDB.
+ */
+@Service
+public class DebitCardNumberSequence {
+
+    private static final String SEQUENCE_KEY = &quot;debitCardNumber&quot;;
+
+    private final ReactiveMongoTemplate mongoTemplate;
+
+    @Value(&quot;${debit-cards.number.prefix:DC-}&quot;)
+    private String prefix;
+
+    @Value(&quot;${debit-cards.number.width:8}&quot;)
+    private int width;
+
+    /**
+     * @param mongoTemplate reactive Mongo template for find-and-modify
+     */
+<span class="nc" id="L32">    public DebitCardNumberSequence(ReactiveMongoTemplate mongoTemplate) {</span>
+<span class="nc" id="L33">        this.mongoTemplate = mongoTemplate;</span>
+<span class="nc" id="L34">    }</span>
+
+    /**
+     * Returns the next formatted card number (prefix + zero-padded sequence).
+     *
+     * @return new card number string
+     */
+    public Mono&lt;String&gt; nextCardNumber() {
+<span class="nc" id="L42">        Query query = Query.query(Criteria.where(&quot;_id&quot;).is(SEQUENCE_KEY));</span>
+<span class="nc" id="L43">        Update update = new Update().inc(&quot;seq&quot;, 1);</span>
+<span class="nc" id="L44">        FindAndModifyOptions options = new FindAndModifyOptions().returnNew(true).upsert(true);</span>
+<span class="nc" id="L45">        return mongoTemplate.findAndModify(query, update, options, SequenceDocument.class)</span>
+<span class="nc" id="L46">                .map(doc -&gt; prefix + String.format(&quot;%0&quot; + width + &quot;d&quot;, doc.getSeq()));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

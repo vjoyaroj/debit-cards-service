@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AccountClient.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debit-cards-service</a> &gt; <a href="index.source.html" class="el_package">nttdata.bootcamp.debit_cards_service.Client</a> &gt; <span class="el_source">AccountClient.java</span></div><h1>AccountClient.java</h1><pre class="source lang-java linenums">package nttdata.bootcamp.debit_cards_service.Client;
+
+import nttdata.bootcamp.debit_cards_service.Dto.AccountDto;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreaker;
+import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreakerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+/**
+ * HTTP client for the external accounts service with reactive circuit breaker.
+ */
+@Component
+public class AccountClient {
+
+    private final WebClient webClient;
+    private final ReactiveCircuitBreaker circuitBreaker;
+
+    /**
+     * @param builder shared WebClient builder
+     * @param accountServiceUrl base URL for the accounts API
+     * @param circuitBreakerFactory factory for the account-service circuit breaker
+     */
+    public AccountClient(WebClient.Builder builder,
+                         @Value(&quot;${account.service.url:http://localhost:8082/api/v1}&quot;) String accountServiceUrl,
+<span class="nc" id="L27">                         ReactiveCircuitBreakerFactory&lt;?, ?&gt; circuitBreakerFactory) {</span>
+<span class="nc" id="L28">        this.webClient = builder.baseUrl(accountServiceUrl).build();</span>
+<span class="nc" id="L29">        this.circuitBreaker = circuitBreakerFactory.create(&quot;accountServiceCb&quot;);</span>
+<span class="nc" id="L30">    }</span>
+
+    /**
+     * Fetches an account by id.
+     *
+     * @param id account identifier
+     * @return account DTO or error on fallback
+     */
+    public Mono&lt;AccountDto&gt; getAccountById(String id) {
+<span class="nc" id="L39">        return circuitBreaker.run(</span>
+<span class="nc" id="L40">                webClient.get()</span>
+<span class="nc" id="L41">                        .uri(&quot;/accounts/{id}&quot;, id)</span>
+<span class="nc" id="L42">                        .retrieve()</span>
+<span class="nc" id="L43">                        .bodyToMono(AccountDto.class),</span>
+<span class="nc" id="L44">                throwable -&gt; Mono.error(new RuntimeException(</span>
+<span class="nc" id="L45">                        &quot;Fallback: Account Service is currently unavailable. Details: &quot; + throwable.getMessage()))</span>
+        );
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

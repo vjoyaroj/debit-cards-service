@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DebitCardMapper.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debit-cards-service</a> &gt; <a href="index.source.html" class="el_package">nttdata.bootcamp.debit_cards_service.Mapper</a> &gt; <span class="el_source">DebitCardMapper.java</span></div><h1>DebitCardMapper.java</h1><pre class="source lang-java linenums">package nttdata.bootcamp.debit_cards_service.Mapper;
+
+import com.bank.debitcard.model.DebitCardAccountLink;
+import com.bank.debitcard.model.DebitCardCreateRequest;
+import com.bank.debitcard.model.DebitCardResponse;
+import com.bank.debitcard.model.DebitCardUpdateRequest;
+import nttdata.bootcamp.debit_cards_service.Entity.DebitCardDocument;
+import org.springframework.stereotype.Component;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.UUID;
+
+/**
+ * Maps between OpenAPI models and {@link DebitCardDocument} persistence entities.
+ */
+@Component
+<span class="fc" id="L19">public class DebitCardMapper {</span>
+
+    /**
+     * Creates a new document; {@code cardNumber} is assigned by the system.
+     *
+     * @param request create request
+     * @param cardNumber generated card number
+     * @return document ready to save
+     */
+    public DebitCardDocument toDocument(DebitCardCreateRequest request, String cardNumber) {
+<span class="fc" id="L29">        DebitCardDocument doc = new DebitCardDocument();</span>
+<span class="fc" id="L30">        doc.setId(UUID.randomUUID().toString());</span>
+<span class="fc" id="L31">        doc.setCustomerId(request.getCustomerId());</span>
+<span class="fc" id="L32">        doc.setCardNumber(cardNumber);</span>
+<span class="fc" id="L33">        doc.setStatus(&quot;ACTIVE&quot;);</span>
+<span class="fc" id="L34">        doc.setLinkedAccounts(new ArrayList&lt;&gt;());</span>
+<span class="fc" id="L35">        doc.setCreatedAt(java.time.Instant.now());</span>
+<span class="fc" id="L36">        return doc;</span>
+    }
+
+    /**
+     * Applies PUT changes (customer id and status).
+     *
+     * @param doc document to mutate
+     * @param request update payload
+     */
+    public void updateDocument(DebitCardDocument doc, DebitCardUpdateRequest request) {
+<span class="fc" id="L46">        doc.setCustomerId(request.getCustomerId());</span>
+<span class="fc" id="L47">        doc.setStatus(request.getStatus().getValue());</span>
+<span class="fc" id="L48">    }</span>
+
+    /**
+     * Converts an internal document to the API response, including linked accounts.
+     *
+     * @param doc persisted debit card
+     * @return API response
+     */
+    public DebitCardResponse toResponse(DebitCardDocument doc) {
+<span class="fc" id="L57">        DebitCardResponse response = new DebitCardResponse();</span>
+<span class="fc" id="L58">        response.setId(doc.getId());</span>
+<span class="fc" id="L59">        response.setCustomerId(doc.getCustomerId());</span>
+<span class="fc" id="L60">        response.setCardNumber(doc.getCardNumber());</span>
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        if (doc.getStatus() != null) {</span>
+<span class="fc" id="L62">            response.setStatus(DebitCardResponse.StatusEnum.fromValue(doc.getStatus()));</span>
+        }
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        if (doc.getCreatedAt() != null) {</span>
+<span class="fc" id="L65">            response.setCreatedAt(OffsetDateTime.ofInstant(doc.getCreatedAt(), ZoneOffset.UTC));</span>
+        }
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        if (doc.getLinkedAccounts() != null) {</span>
+<span class="fc" id="L68">            response.setLinkedAccounts(doc.getLinkedAccounts().stream().map(link -&gt; {</span>
+<span class="fc" id="L69">                DebitCardAccountLink apiLink = new DebitCardAccountLink();</span>
+<span class="fc" id="L70">                apiLink.setAccountId(link.getAccountId());</span>
+<span class="fc" id="L71">                apiLink.setIsPrimary(Boolean.TRUE.equals(link.getIsPrimary()));</span>
+<span class="fc" id="L72">                return apiLink;</span>
+<span class="fc" id="L73">            }).toList());</span>
+        }
+<span class="fc" id="L75">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

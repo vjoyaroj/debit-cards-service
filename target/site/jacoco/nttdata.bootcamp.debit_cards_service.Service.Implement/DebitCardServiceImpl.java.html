@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DebitCardServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debit-cards-service</a> &gt; <a href="index.source.html" class="el_package">nttdata.bootcamp.debit_cards_service.Service.Implement</a> &gt; <span class="el_source">DebitCardServiceImpl.java</span></div><h1>DebitCardServiceImpl.java</h1><pre class="source lang-java linenums">package nttdata.bootcamp.debit_cards_service.Service.Implement;
+
+import com.bank.debitcard.model.DebitCardAccountLink;
+import com.bank.debitcard.model.DebitCardCreateRequest;
+import com.bank.debitcard.model.DebitCardResponse;
+import com.bank.debitcard.model.DebitCardUpdateRequest;
+import com.bank.debitcard.model.LinkAccountRequest;
+import com.bank.debitcard.model.UnlinkAccountRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.core.Single;
+import lombok.RequiredArgsConstructor;
+import nttdata.bootcamp.debit_cards_service.Client.AccountClient;
+import nttdata.bootcamp.debit_cards_service.Mapper.DebitCardMapper;
+import nttdata.bootcamp.debit_cards_service.Repository.DebitCardRepository;
+import nttdata.bootcamp.debit_cards_service.Rules.DebitCardAccountRulesPolicy;
+import nttdata.bootcamp.debit_cards_service.Service.DebitCardNumberSequence;
+import nttdata.bootcamp.debit_cards_service.Service.DebitCardService;
+import nttdata.bootcamp.debit_cards_service.Validation.ValidationSupport;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.stereotype.Service;
+import reactor.adapter.rxjava.RxJava3Adapter;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.util.List;
+
+/**
+ * Default {@link DebitCardService}: persistence, Redis cache, account-service integration and link rules.
+ */
+@Service
+@RequiredArgsConstructor
+public class DebitCardServiceImpl implements DebitCardService {
+
+    private final DebitCardRepository repository;
+    private final DebitCardMapper mapper;
+    private final ValidationSupport validationSupport;
+    private final AccountClient accountClient;
+    private final DebitCardAccountRulesPolicy accountRulesPolicy;
+    private final DebitCardNumberSequence debitCardNumberSequence;
+    private final ReactiveStringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+
+    @Value(&quot;${redis.cache.ttl-seconds:900}&quot;)
+    private long cacheTtlSeconds;
+
+    /**
+     * Removes one debit card entry from Redis cache.
+     *
+     * @param debitCardId debit card identifier
+     * @return empty completion when delete finishes
+     */
+    private Mono&lt;Void&gt; evictDebitCardCache(String debitCardId) {
+<span class="nc" id="L57">        String key = &quot;debitCard:&quot; + debitCardId;</span>
+<span class="nc" id="L58">        return redisTemplate.delete(key).then();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;List&lt;DebitCardResponse&gt;&gt; findAll() {
+<span class="nc" id="L66">        return RxJava3Adapter.fluxToFlowable(repository.findByStatus(&quot;ACTIVE&quot;))</span>
+<span class="nc" id="L67">                .map(mapper::toResponse)</span>
+<span class="nc" id="L68">                .toList();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;DebitCardResponse&gt; create(DebitCardCreateRequest request) {
+<span class="nc" id="L76">        return RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L77">                Mono.fromCallable(() -&gt; validationSupport.validateOrThrow(request))</span>
+<span class="nc" id="L78">                        .flatMap(v -&gt; debitCardNumberSequence.nextCardNumber()</span>
+<span class="nc" id="L79">                                .map(cardNumber -&gt; mapper.toDocument(v, cardNumber)))</span>
+<span class="nc" id="L80">                        .flatMap(repository::save)</span>
+<span class="nc" id="L81">                        .map(mapper::toResponse)</span>
+<span class="nc" id="L82">        ).flatMap(card -&gt; RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L83">                evictDebitCardCache(card.getId()).thenReturn(card)</span>
+        ));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Maybe&lt;DebitCardResponse&gt; getById(String id) {
+<span class="nc" id="L92">        String cacheKey = &quot;debitCard:&quot; + id;</span>
+<span class="nc" id="L93">        return RxJava3Adapter.monoToMaybe(</span>
+<span class="nc" id="L94">                redisTemplate.opsForValue().get(cacheKey)</span>
+<span class="nc" id="L95">                        .flatMap(json -&gt; {</span>
+                            try {
+<span class="nc" id="L97">                                return Mono.just(objectMapper.readValue(json, DebitCardResponse.class));</span>
+<span class="nc" id="L98">                            } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L99">                                return Mono.error(new RuntimeException(&quot;Failed to deserialize debit card from cache&quot;, e));</span>
+                            }
+                        })
+<span class="nc" id="L102">                        .switchIfEmpty(repository.findById(id)</span>
+<span class="nc" id="L103">                                .map(mapper::toResponse)</span>
+<span class="nc" id="L104">                                .flatMap(dto -&gt; {</span>
+                                    try {
+<span class="nc" id="L106">                                        String json = objectMapper.writeValueAsString(dto);</span>
+<span class="nc" id="L107">                                        return redisTemplate.opsForValue()</span>
+<span class="nc" id="L108">                                                .set(cacheKey, json, Duration.ofSeconds(cacheTtlSeconds))</span>
+<span class="nc" id="L109">                                                .thenReturn(dto);</span>
+<span class="nc" id="L110">                                    } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L111">                                        return Mono.error(new RuntimeException(&quot;Failed to serialize debit card for cache&quot;, e));</span>
+                                    }
+                                }))
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;DebitCardResponse&gt; update(String id, DebitCardUpdateRequest request) {
+<span class="nc" id="L122">        return RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L123">                Mono.fromCallable(() -&gt; validationSupport.validateOrThrow(request))</span>
+<span class="nc" id="L124">                        .then(repository.findById(id)</span>
+<span class="nc" id="L125">                                .switchIfEmpty(Mono.error(new RuntimeException(&quot;Debit card not found&quot;)))</span>
+<span class="nc" id="L126">                                .doOnNext(doc -&gt; mapper.updateDocument(doc, request))</span>
+<span class="nc" id="L127">                                .flatMap(repository::save)</span>
+<span class="nc" id="L128">                                .map(mapper::toResponse)</span>
+                        )
+<span class="nc" id="L130">        ).flatMap(card -&gt; RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L131">                evictDebitCardCache(card.getId()).thenReturn(card)</span>
+        ));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Completable delete(String id) {
+<span class="nc" id="L140">        return RxJava3Adapter.monoToMaybe(repository.findById(id))</span>
+<span class="nc" id="L141">                .switchIfEmpty(Single.error(new RuntimeException(&quot;Debit card not found&quot;)))</span>
+<span class="nc" id="L142">                .flatMapCompletable(doc -&gt; RxJava3Adapter.monoToCompletable(</span>
+<span class="nc" id="L143">                        Mono.fromRunnable(() -&gt; doc.setStatus(&quot;INACTIVE&quot;))</span>
+<span class="nc" id="L144">                                .then(repository.save(doc))</span>
+<span class="nc" id="L145">                                .then(evictDebitCardCache(id))</span>
+                ));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;DebitCardResponse&gt; linkAccount(String id, LinkAccountRequest request) {
+<span class="nc" id="L154">        return RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L155">                Mono.fromCallable(() -&gt; validationSupport.validateOrThrow(request))</span>
+<span class="nc" id="L156">                        .then(repository.findById(id)</span>
+<span class="nc" id="L157">                                .switchIfEmpty(Mono.error(new RuntimeException(&quot;Debit card not found&quot;)))</span>
+<span class="nc" id="L158">                                .flatMap(doc -&gt; accountClient.getAccountById(request.getAccountId())</span>
+<span class="nc" id="L159">                                        .switchIfEmpty(Mono.error(new RuntimeException(&quot;Account not found&quot;)))</span>
+<span class="nc" id="L160">                                        .flatMap(account -&gt; {</span>
+<span class="nc" id="L161">                                            accountRulesPolicy.validateAccountForLink(doc, account);</span>
+<span class="nc" id="L162">                                            List&lt;nttdata.bootcamp.debit_cards_service.Entity.DebitCardAccountLink&gt; links =</span>
+<span class="nc" id="L163">                                                    accountRulesPolicy.applyLinkRules(</span>
+<span class="nc" id="L164">                                                            doc.getLinkedAccounts(),</span>
+<span class="nc" id="L165">                                                            request.getAccountId(),</span>
+<span class="nc" id="L166">                                                            request.getIsPrimary()</span>
+                                                    );
+<span class="nc" id="L168">                                            doc.setLinkedAccounts(links);</span>
+<span class="nc" id="L169">                                            return repository.save(doc).map(mapper::toResponse);</span>
+                                        })
+                                )
+                        )
+<span class="nc" id="L173">        ).flatMap(card -&gt; RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L174">                evictDebitCardCache(card.getId()).thenReturn(card)</span>
+        ));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;DebitCardResponse&gt; unlinkAccount(String id, UnlinkAccountRequest request) {
+<span class="nc" id="L183">        return RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L184">                Mono.fromCallable(() -&gt; validationSupport.validateOrThrow(request))</span>
+<span class="nc" id="L185">                        .then(repository.findById(id)</span>
+<span class="nc" id="L186">                                .switchIfEmpty(Mono.error(new RuntimeException(&quot;Debit card not found&quot;)))</span>
+<span class="nc" id="L187">                                .flatMap(doc -&gt; {</span>
+<span class="nc" id="L188">                                    List&lt;nttdata.bootcamp.debit_cards_service.Entity.DebitCardAccountLink&gt; links =</span>
+<span class="nc" id="L189">                                            accountRulesPolicy.applyUnlinkRules(</span>
+<span class="nc" id="L190">                                                    doc.getLinkedAccounts(),</span>
+<span class="nc" id="L191">                                                    request.getAccountId()</span>
+                                            );
+<span class="nc" id="L193">                                    doc.setLinkedAccounts(links);</span>
+<span class="nc" id="L194">                                    return repository.save(doc).map(mapper::toResponse);</span>
+                                })
+                        )
+<span class="nc" id="L197">        ).flatMap(card -&gt; RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L198">                evictDebitCardCache(card.getId()).thenReturn(card)</span>
+        ));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Single&lt;List&lt;DebitCardAccountLink&gt;&gt; getAccounts(String id) {
+<span class="nc" id="L207">        return RxJava3Adapter.monoToSingle(</span>
+<span class="nc" id="L208">                repository.findById(id)</span>
+<span class="nc" id="L209">                        .switchIfEmpty(Mono.error(new RuntimeException(&quot;Debit card not found&quot;)))</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">                        .map(doc -&gt; doc.getLinkedAccounts() != null</span>
+<span class="nc" id="L211">                                ? doc.getLinkedAccounts()</span>
+<span class="nc" id="L212">                                : List.&lt;nttdata.bootcamp.debit_cards_service.Entity.DebitCardAccountLink&gt;of())</span>
+<span class="nc" id="L213">                        .map(links -&gt; links.stream().map(link -&gt; {</span>
+<span class="nc" id="L214">                            DebitCardAccountLink apiLink = new DebitCardAccountLink();</span>
+<span class="nc" id="L215">                            apiLink.setAccountId(link.getAccountId());</span>
+<span class="nc" id="L216">                            apiLink.setIsPrimary(Boolean.TRUE.equals(link.getIsPrimary()));</span>
+<span class="nc" id="L217">                            return apiLink;</span>
+<span class="nc" id="L218">                        }).toList())</span>
+        );
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

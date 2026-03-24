@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DebitCardAccountRules.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debit-cards-service</a> &gt; <a href="index.source.html" class="el_package">nttdata.bootcamp.debit_cards_service.Rules</a> &gt; <span class="el_source">DebitCardAccountRules.java</span></div><h1>DebitCardAccountRules.java</h1><pre class="source lang-java linenums">package nttdata.bootcamp.debit_cards_service.Rules;
+
+import nttdata.bootcamp.debit_cards_service.Dto.AccountDto;
+import nttdata.bootcamp.debit_cards_service.Entity.DebitCardAccountLink;
+import nttdata.bootcamp.debit_cards_service.Entity.DebitCardDocument;
+import nttdata.bootcamp.debit_cards_service.Exception.BusinessRuleException;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Default implementation of {@link DebitCardAccountRulesPolicy} for linked account consistency.
+ */
+@Component
+<span class="fc" id="L17">public class DebitCardAccountRules implements DebitCardAccountRulesPolicy {</span>
+
+    /**
+     * Validates account status and ownership before linking.
+     *
+     * @param card target debit card
+     * @param account account to link
+     * @throws BusinessRuleException if the account is not active or does not belong to the card's customer
+     */
+    @Override
+    public void validateAccountForLink(DebitCardDocument card, AccountDto account) {
+<span class="pc bpc" id="L28" title="2 of 4 branches missed.">        if (account.getStatus() != null &amp;&amp; !&quot;ACTIVE&quot;.equalsIgnoreCase(account.getStatus())) {</span>
+<span class="fc" id="L29">            throw new BusinessRuleException(&quot;Account is not active&quot;);</span>
+        }
+<span class="nc bnc" id="L31" title="All 2 branches missed.">        if (!Objects.equals(account.getCustomerId(), card.getCustomerId())) {</span>
+<span class="nc" id="L32">            throw new BusinessRuleException(&quot;Account does not belong to the debit card customer&quot;);</span>
+        }
+<span class="nc" id="L34">    }</span>
+
+    /**
+     * Adds or updates a link and enforces a single primary account when requested.
+     *
+     * @param currentLinks existing links
+     * @param accountId account id to link
+     * @param isPrimaryRequest whether this account should be primary
+     * @return updated link list
+     */
+    @Override
+    public List&lt;DebitCardAccountLink&gt; applyLinkRules(List&lt;DebitCardAccountLink&gt; currentLinks,
+                                                     String accountId,
+                                                     Boolean isPrimaryRequest) {
+        List&lt;DebitCardAccountLink&gt; links =
+<span class="pc bpc" id="L49" title="1 of 2 branches missed.">                currentLinks != null ? new ArrayList&lt;&gt;(currentLinks) : new ArrayList&lt;&gt;();</span>
+
+<span class="pc" id="L51">        boolean exists = links.stream().anyMatch(l -&gt; Objects.equals(l.getAccountId(), accountId));</span>
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">        if (!exists) {</span>
+<span class="fc" id="L53">            links.add(new DebitCardAccountLink(accountId, Boolean.TRUE.equals(isPrimaryRequest)));</span>
+        }
+
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">        if (Boolean.TRUE.equals(isPrimaryRequest)) {</span>
+<span class="fc" id="L57">            links.forEach(l -&gt; {</span>
+<span class="pc bpc" id="L58" title="1 of 2 branches missed.">                if (!Objects.equals(l.getAccountId(), accountId)) {</span>
+<span class="nc" id="L59">                    l.setIsPrimary(false);</span>
+                } else {
+<span class="fc" id="L61">                    l.setIsPrimary(true);</span>
+                }
+<span class="fc" id="L63">            });</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        } else if (links.stream().noneMatch(l -&gt; Boolean.TRUE.equals(l.getIsPrimary()))) {</span>
+<span class="nc" id="L65">            links.get(0).setIsPrimary(true);</span>
+        }
+
+<span class="fc" id="L68">        return links;</span>
+    }
+
+    /**
+     * Removes a link and promotes another account to primary if none remains primary.
+     *
+     * @param currentLinks existing links
+     * @param accountId account id to unlink
+     * @return updated link list
+     */
+    @Override
+    public List&lt;DebitCardAccountLink&gt; applyUnlinkRules(List&lt;DebitCardAccountLink&gt; currentLinks,
+                                                       String accountId) {
+        List&lt;DebitCardAccountLink&gt; links =
+<span class="nc bnc" id="L82" title="All 2 branches missed.">                currentLinks != null ? new ArrayList&lt;&gt;(currentLinks) : new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L84">        links.removeIf(l -&gt; Objects.equals(l.getAccountId(), accountId));</span>
+
+<span class="nc bnc" id="L86" title="All 4 branches missed.">        if (!links.isEmpty() &amp;&amp; links.stream().noneMatch(l -&gt; Boolean.TRUE.equals(l.getIsPrimary()))) {</span>
+<span class="nc" id="L87">            links.get(0).setIsPrimary(true);</span>
+        }
+
+<span class="nc" id="L90">        return links;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: Debit Cards API
+  description: Microservicio de gestión de tarjetas de débito
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8085/api/v1
+
+paths:
+  /debit-cards:
+    get:
+      summary: Listar tarjetas de débito activas
+      description: Devuelve únicamente tarjetas con estado ACTIVE.
+      operationId: getDebitCards
+      responses:
+        '200':
+          description: Lista de tarjetas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DebitCardResponse'
+    post:
+      summary: Emitir una nueva tarjeta de débito
+      description: El número de tarjeta y el estado inicial los asigna el sistema (ACTIVE). No envíe cardNumber ni status en el body.
+      operationId: createDebitCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebitCardCreateRequest'
+      responses:
+        '201':
+          description: Tarjeta emitida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitCardResponse'
+        '400':
+          description: Solicitud inválida
+
+  /debit-cards/{id}:
+    get:
+      summary: Obtener tarjeta por ID
+      operationId: getDebitCardById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tarjeta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitCardResponse'
+        '404':
+          description: Tarjeta no encontrada
+    put:
+      summary: Actualizar tarjeta
+      operationId: updateDebitCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebitCardUpdateRequest'
+      responses:
+        '200':
+          description: Tarjeta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitCardResponse'
+        '404':
+          description: Tarjeta no encontrada
+    delete:
+      summary: Baja lógica de la tarjeta
+      description: No elimina el registro; establece el estado en INACTIVE.
+      operationId: deleteDebitCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Tarjeta dada de baja (INACTIVE)
+
+  /debit-cards/{id}/link-account:
+    post:
+      summary: Asociar una cuenta a la tarjeta
+      operationId: linkAccountToDebitCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkAccountRequest'
+      responses:
+        '200':
+          description: Asociación realizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitCardResponse'
+        '404':
+          description: Tarjeta no encontrada
+        '422':
+          description: Regla de negocio no cumplida
+
+  /debit-cards/{id}/unlink-account:
+    post:
+      summary: Desasociar una cuenta de la tarjeta
+      operationId: unlinkAccountFromDebitCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlinkAccountRequest'
+      responses:
+        '200':
+          description: Desasociación realizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitCardResponse'
+        '404':
+          description: Tarjeta no encontrada
+
+  /debit-cards/{id}/accounts:
+    get:
+      summary: Listar cuentas asociadas a la tarjeta
+      operationId: getDebitCardAccounts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cuentas asociadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DebitCardAccountLink'
+        '404':
+          description: Tarjeta no encontrada
+
+components:
+  schemas:
+    DebitCardCreateRequest:
+      type: object
+      required:
+        - customerId
+      properties:
+        customerId:
+          type: string
+          description: ID del cliente titular
+
+    DebitCardUpdateRequest:
+      type: object
+      required:
+        - customerId
+        - status
+      properties:
+        customerId:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+            - BLOCKED
+            - CLOSED
+
+    DebitCardResponse:
+      type: object
+      required:
+        - customerId
+        - cardNumber
+        - status
+      properties:
+        id:
+          type: string
+        customerId:
+          type: string
+        cardNumber:
+          type: string
+          description: Generado por el sistema; único y correlativo
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+            - BLOCKED
+            - CLOSED
+        createdAt:
+          type: string
+          format: date-time
+        linkedAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebitCardAccountLink'
+
+    DebitCardAccountLink:
+      type: object
+      required:
+        - accountId
+      properties:
+        accountId:
+          type: string
+        isPrimary:
+          type: boolean
+
+    LinkAccountRequest:
+      type: object
+      required:
+        - accountId
+      properties:
+        accountId:
+          type: string
+        isPrimary:
+          type: boolean
+
+    UnlinkAccountRequest:
+      type: object
+      required:
+        - accountId
+      properties:
+        accountId:
+          type: string
