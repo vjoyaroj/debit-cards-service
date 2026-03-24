@@ -13,6 +13,9 @@ Microservicio de gestion de tarjetas de debito y vinculacion de cuentas.
 - `POST /api/v1/debit-cards/{id}/unlink-account`
 - `GET /api/v1/debit-cards/{id}/accounts`
 
+## Nota
+El `docker-compose.yml` del entorno esta en (`yanki-service`).
+
 ## Proyectos relacionados
 - https://github.com/vjoyaroj/bank-config-repo
 - https://github.com/vjoyaroj/microservices-config
